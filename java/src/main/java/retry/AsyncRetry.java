@@ -19,6 +19,19 @@ public class AsyncRetry {
         return future;
     }
 
+    public <T> CompletableFuture<T> decoratorRetry(int maxAttempts, long delay, Supplier<T> operation) {
+        return retry(maxAttempts, delay, () -> {
+            try {
+                return CompletableFuture.completedFuture(operation.get());
+            } catch (Exception ex) {
+                CompletableFuture<T> future = new CompletableFuture<>();
+                future.completeExceptionally(ex);
+                return future;
+            }
+        });
+    }
+
+
     private <T> void attemptOperation(CompletableFuture<T> future, int maxAttempts, int attempt, long delay, Supplier<CompletableFuture<T>> operation) {
         operation.get().thenAccept(result -> {
             future.complete(result);
@@ -28,7 +41,7 @@ public class AsyncRetry {
                 retryScheduler.schedule(new Runnable() {
                     @Override
                     public void run() {
-                        logger.info("retry attempt {}, max attempts {}", attempt, maxAttempts);
+                        logger.info("retry attempt {}, max attempts {}", attempt + 1, maxAttempts);
                         attemptOperation(future, maxAttempts, attempt + 1, delay, operation);
                     }
                 }, delay, TimeUnit.MILLISECONDS);
